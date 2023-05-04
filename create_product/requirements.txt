@@ -1,3 +1,4 @@
-firebase-admin
-google-cloud-firestore
-google-cloud-storage
+firebase-admin==6.1.0
+google-cloud-firestore==2.11.1
+google-cloud-storage==2.8.0
+sqlalchemy==2.0.12
