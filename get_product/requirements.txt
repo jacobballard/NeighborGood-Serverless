@@ -1,3 +1,5 @@
+functions_framework
 firebase-admin==6.1.0
 google-cloud-firestore==2.11.1
 sqlalchemy==2.0.12
+psycopg2==2.9.6

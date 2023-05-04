@@ -2,7 +2,6 @@ import firebase_admin
 from firebase_admin import auth, firestore, credentials
 import functions_framework
 from sqlalchemy import create_engine, text
-from google.cloud import storage
 import flask
 
 
