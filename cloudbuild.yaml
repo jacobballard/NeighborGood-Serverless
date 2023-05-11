@@ -1,3 +1,27 @@
+# steps:
+# - name: 'gcr.io/cloud-builders/git'
+#   args: ['clone', '${_REPO_URL}', 'repo']
+# - name: 'gcr.io/cloud-builders/git'
+#   dir: 'repo'
+#   entrypoint: 'bash'
+#   args:
+#   - '-c'
+#   - |
+#     # Get the latest commit hash on the main branch
+#     latest_commit=$(git rev-parse main)
+
+#     # Iterate over all directories in the functions directory
+#     for d in functions/*/ ; do
+#         # Check if the directory has changes compared to the latest commit
+#         if ! git diff --quiet "$latest_commit" "$d"; then
+#             # Check if cloudbuild.yaml exists
+#             if [ -f "$d/cloudbuild.yaml" ]; then
+#                 # Call gcloud builds submit with the config file
+#                 gcloud builds submit --config "$d/cloudbuild.yaml" "$d"
+#             fi
+#         fi
+#     done
+# To Debug:
 steps:
 - name: 'gcr.io/cloud-builders/git'
   args: ['clone', '${_REPO_URL}', 'repo']
@@ -9,15 +33,23 @@ steps:
   - |
     # Get the latest commit hash on the main branch
     latest_commit=$(git rev-parse main)
+    echo "Latest commit: $latest_commit"
 
     # Iterate over all directories in the functions directory
     for d in functions/*/ ; do
+        echo "Checking directory: $d"
         # Check if the directory has changes compared to the latest commit
         if ! git diff --quiet "$latest_commit" "$d"; then
+            echo "$d has changes"
             # Check if cloudbuild.yaml exists
             if [ -f "$d/cloudbuild.yaml" ]; then
+                echo "Submitting build for $d"
                 # Call gcloud builds submit with the config file
                 gcloud builds submit --config "$d/cloudbuild.yaml" "$d"
+            else
+                echo "No cloudbuild.yaml in $d"
             fi
+        else
+            echo "$d has no changes"
         fi
     done

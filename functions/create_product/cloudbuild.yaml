@@ -1,7 +1,30 @@
+# steps:
+# - name: 'python:3.9-slim'
+#   id: install dependencies
+#   args: ['pip', 'install', '-r', 'functions/on_user_created/requirements.txt', '-t', '.']
+
+# - name: 'gcr.io/cloud-builders/gcloud'
+#   id: deploy
+#   args:
+#   - functions
+#   - deploy
+#   - on_user_created
+#   - --source=.
+#   - --trigger-event=providers/firebase.auth/eventTypes/user.create
+#   - --runtime=python39
+#   - --entry-point=on_user_created
+#   - --allow-unauthenticated
+#   - --region=us-central1
+#   - --memory=256MB
+#   - --timeout=60
+# Debug:
 steps:
 - name: 'python:3.9-slim'
   id: install dependencies
   args: ['pip', 'install', '-r', 'functions/on_user_created/requirements.txt', '-t', '.']
+
+- name: 'debian:stretch'
+  args: ['ls', '-l', '.']
 
 - name: 'gcr.io/cloud-builders/gcloud'
   id: deploy
