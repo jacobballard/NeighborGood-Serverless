@@ -53,3 +53,5 @@ steps:
             echo "$d has no changes"
         fi
     done
+
+logging: CLOUD_LOGGING_ONLY
