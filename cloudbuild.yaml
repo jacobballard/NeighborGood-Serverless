@@ -1,6 +1,23 @@
 steps:
-- name: 'gcr.io/cloud-builders/gcloud'
-  args: ['components', 'install', 'beta', 'cloud-functions-python-runtime', '--quiet']
-- name: 'gcr.io/cloud-builders/gcloud'
+- name: 'gcr.io/cloud-builders/git'
+  args: ['clone', '${_REPO_URL}', 'repo']
+- name: 'gcr.io/cloud-builders/git'
+  dir: 'repo'
   entrypoint: 'bash'
-  args: ['-c', 'gcloud beta functions deploy your_function_name --runtime python39 --trigger-http --allow-unauthenticated']
+  args:
+  - '-c'
+  - |
+    # Get the latest commit hash on the main branch
+    latest_commit=$(git rev-parse main)
+
+    # Iterate over all directories in the functions directory
+    for d in functions/*/ ; do
+        # Check if the directory has changes compared to the latest commit
+        if ! git diff --quiet "$latest_commit" "$d"; then
+            # Check if cloudbuild.yaml exists
+            if [ -f "$d/cloudbuild.yaml" ]; then
+                # Call gcloud builds submit with the config file
+                gcloud builds submit --config "$d/cloudbuild.yaml" "$d"
+            fi
+        fi
+    done
