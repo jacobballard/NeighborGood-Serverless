@@ -1,21 +1,46 @@
-import firebase_admin
+# import firebase_admin
 import functions_framework
 from sqlalchemy import create_engine, text
 import flask
-from shared import database
-
+from shared.sql_db import db
+# from shared.cors import add_cors_headers
 # cred = credentials.Certificate("../pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json")
 # firebase_admin.initialize_app(cred)
 
-
+# @add_cors_headers
 @functions_framework.http
 def get_product(request: flask.Request):
+    if request.method == 'OPTIONS':
+        # Allows GET requests from any origin with the Content-Type
+        # header and caches preflight response for an 3600s
+        headers = {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Max-Age': '3600'
+        }
+
+        return ('', 204, headers)
+    print("returned")
+
+    # Set CORS headers for the main request
+    headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST'
+    }
+
+    
     # Do I need to do firebase auth here? Probably
-
+    print("here")
+    print("Raw data: ", request.data)
+    print(request)
     request_data = request.get_json()
+    print("got da json")
     id = request_data.get('id')
+    print(id)
+    print("id")
 
-    connection = database.db.connect()
+    connection = db.connect()
 
     # Get product data
     product_query = text('SELECT * FROM products WHERE id = :id')
@@ -81,6 +106,8 @@ def get_product(request: flask.Request):
     # Build JSON response
     product_json = {
         'title': name,
+        'productId': id,
+        'sellerId': seller_id,
         'description': description,
         'price': price,
         'stock': stock,
@@ -89,4 +116,4 @@ def get_product(request: flask.Request):
         'product_modifiers': modifiers
     }
 
-    return product_json, 200
+    return product_json, 200, headers

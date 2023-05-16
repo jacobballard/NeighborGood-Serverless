@@ -22,6 +22,7 @@ data = {
             "modifier_type" : "choice",
             "name" : "Choose a color",
             "max_options" : 1,
+            "required" : False,
             "options" : 
             [
                 {

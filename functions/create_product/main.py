@@ -250,10 +250,11 @@ def create_product(request: flask.Request):
                 max_options = mod.get('max_options')
                 max_characters = mod.get('max_characters')
                 options = mod.get('options', [])
+                required = mod.get('required', True)
 
                 insert_modifier_query = text(
-                    'INSERT INTO modifiers (name, modifier_type, max_options, max_characters) '
-                    'VALUES (:name, :modifier_type, :max_options, :max_characters) '
+                    'INSERT INTO modifiers (name, modifier_type, max_options, modifier_required, max_characters) '
+                    'VALUES (:name, :modifier_type, :max_options, :modifier_required, :max_characters) '
                     'RETURNING id'
                 )
 
@@ -261,12 +262,14 @@ def create_product(request: flask.Request):
                     'name': name,
                     'modifier_type': modifier_type,
                     'max_options': max_options,
+                    'modifier_required' : required,
                     'max_characters': max_characters,
                 }
 
                 result = connection.execute(insert_modifier_query, modifier_values)
                 modifier_id = result.fetchone()[0]
-
+                # TODO : All of this needs to be null safe and return errors if lacking a necessary
+                # logical piece
                 if modifier_type == 'choice':
                     for option in options:
                         opt_name = option['name']

@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 
-db_user = 'jacobballard'
+db_user = 'postgres'
 db_pass = 'postgres'
 db_name = 'postgres'
 db_host = 'localhost'

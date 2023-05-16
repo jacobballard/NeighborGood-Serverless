@@ -1,4 +1,8 @@
 functions/**/venv/
 functions/**/env/
 functions/**/__pycache__/
+Postgres/data/
+Postgres/__pycache__/
+Postgres/venv/
+Postgres/logfile
 
