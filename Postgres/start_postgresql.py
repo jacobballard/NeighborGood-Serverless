@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import os
-from create_tables import create_tables
+# from create_tables import create_tables
 import psycopg2 as psy
 
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT

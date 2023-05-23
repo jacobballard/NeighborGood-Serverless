@@ -2,12 +2,54 @@ from sqlalchemy import create_engine, text
 import flask
 import functions_framework
 import os
+import stripe
 # from ...shared import database
 # from ...shared.sql_db import db
 # from ...shared.auth import is_authenticated_wrapper, has_required_role
-from functions.shared.sql_db import db
-from functions.shared.auth import is_authenticated_wrapper, has_required_role
+from shared.sql_db import db
+from shared.auth import is_authenticated_wrapper, has_required_role
 
+def create_stripe_account(user_data):
+    try:
+        if user_data['business_type'] == 'individual':
+            account = stripe.Account.create(
+                type='custom',
+                country=user_data['country'],
+                email=user_data['email'],
+                business_type='individual',
+                individual={
+                    'first_name': user_data['first_name'],
+                    'last_name': user_data['last_name'],
+                    'dob': {
+                        'day': user_data['dob_day'],
+                        'month': user_data['dob_month'],
+                        'year': user_data['dob_year'],
+                    },
+                    'address': user_data['address'],
+                    'phone': user_data['phone'],
+                    'email': user_data['email'],
+                },
+                requested_capabilities=['transfers'],
+            )
+        elif user_data['business_type'] == 'company':
+            account = stripe.Account.create(
+                type='custom',
+                country=user_data['country'],
+                email=user_data['email'],
+                business_type='company',
+                company={
+                    'name': user_data['business_name'],
+                    'tax_id': user_data['business_tax_id'],
+                },
+                requested_capabilities=['transfers'],
+            )
+        else:
+            return {'error': 'Invalid business type'}, 400
+
+        return account.id
+    except InvalidRequestError as e:
+        # This will catch any Stripe validation errors and return a meaningful error message
+        return {'error': str(e)}, 400
 
 @is_authenticated_wrapper(False)
 @has_required_role("buyer")
@@ -20,7 +62,9 @@ def create_store(request: flask.Request):
         user_data = flask.g.user_data
         request_data = request.get_json
 
-
+        stripe_account_id = create_stripe_account(user_data)
+        if 'error' in stripe_account_id:
+            return stripe_account_id
         # This should be interpreted from jwt later 
         # id = request_data.get('id')
         id = user['uid']
@@ -32,7 +76,8 @@ def create_store(request: flask.Request):
         tiktok = request_data.get('tiktok', None)
         pinterest = request_data.get('pinterest', None)
         facebook = request_data.get('facebook', None)
-        delivery_methods = request_data.get('delivery_methods', [])
+        delivery_methods = request_data.get('delivery_methods')
+        
         delivery_radius = request_data.get('radius', None)
 
         for i in range(len(delivery_methods)):
@@ -47,8 +92,8 @@ def create_store(request: flask.Request):
             return {'error': 'Required fields: id, title, latitude, and longitude'}, 400
 
         insert_seller_query = text(
-            'INSERT INTO sellers (id, title, description, instagram, tiktok, pinterest, facebook, latitude, longitude, delivery_radius)'
-            'VALUES (;id, :title, :description, :instagram, :tiktok, :pinterest, :facebook, :latitude, :longitude, :delivery_radius)'
+            'INSERT INTO sellers (id, title, description, instagram, tiktok, pinterest, facebook, latitude, longitude, delivery_radius, stripe_account_id)'
+            'VALUES (;id, :title, :description, :instagram, :tiktok, :pinterest, :facebook, :latitude, :longitude, :delivery_radius, :stripe_account_id)'
         )
         seller_values = {
             "id" : id,
@@ -60,7 +105,8 @@ def create_store(request: flask.Request):
             "facebook" : facebook,
             "latitude" : latitude,
             "longitude" : longitude,
-            "delivery_radius" : delivery_radius
+            "delivery_radius" : delivery_radius,
+            "stripe_account_id" : stripe_account_id
         }
 
         connection = db.connect()
@@ -74,6 +120,15 @@ def create_store(request: flask.Request):
                     VALUES (%s, %s)
                 """
                 connection.execute(insert_delivery_methods_query, (id, method))
+
+                if 'image_urls' in request_data:
+                    image_urls = request_data.get('image_urls')
+                    if isinstance(image_urls, list):
+                        for image_url in image_urls:
+                            insert_image_query = text(
+                                'INSERT INTO seller_images (seller_id, image_url) VALUES (:seller_id, :image_url)'
+                            )
+                            connection.execute(insert_image_query, {"seller_id" : id, "image_url" : image_url})
 
             connection.commit()
             connection.close()

@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS sellers (
     facebook VARCHAR(255),
     latitude FLOAT NOT NULL,
     longitude FLOAT NOT NULL,
-    delivery_radius INT
+    delivery_radius INT,
+    stripe_account_id VARCHAR(255) NOT NULL,
 );
 
 
