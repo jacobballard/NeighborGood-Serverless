@@ -26,8 +26,25 @@ data = {
     'facebook': 'sample_store_facebook',
     'latitude': 12.34,
     'longitude': 56.78,
-    'delivery_radius': 10,
-    'delivery_methods': ["local pickup", "delivery"]
+    'address_line_1': "2354 Randolph Ct",
+    'address_line_2' : "",
+    'zip_code': '40503',
+    'city' : 'Lexington',
+    'state' : 'KY',
+    'delivery_methods': {
+        'local_pickup' : {
+            'show_address_to_customers' : False,
+        },
+        'delivery' : {
+            'range' : 25.0,
+            'fee' : 5.0,
+        },
+        'shipping' : {
+            'fee' : 10.0,
+            'eta' : 14,
+        } 
+    },
+    'image_urls' : ["http://placeholder.io/image", "etc", "etc"]
 }
 
 response = requests.post(url, headers=headers, data=json.dumps(data))
