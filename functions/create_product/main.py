@@ -1,35 +1,52 @@
 import flask
 import functions_framework
 from sqlalchemy import create_engine, text
-from functions.shared.sql_db import db
-from functions.shared.auth import is_authenticated_wrapper, has_required_role
+from shared.sql_db import db
+from shared.auth import is_authenticated_wrapper, has_required_role
 
 @is_authenticated_wrapper(False)
 @has_required_role("seller")
 @functions_framework.http
 def create_product(request: flask.Request):
     if request.method == 'POST':
-        seller_id = flask.g.user['uid']
+        user = flask.g.user
+        seller_id = user['user_id']
         request_data = request.get_json()
+        id = request_data.get('id')
         title = request_data.get('title')
         description = request_data.get('description', None)
-        price = request_data.get('price')
-        stock = request_data.get('stock', None)
+        price = float(request_data.get('price'))
+        # stock = request_data.get('stock', None)
         # allow_shipping = request_data.get('allow_shipping', False)
         # allow_local_pickup = request_data.get('allow_local_pickup', False)
         # allow_delivery = request_data.get('allow_delivery', False)
         delivery_methods = request_data.get('delivery_methods', [])
-        product_modifiers = request_data.get('product_modifiers', [])
-
+        product_modifiers = request_data.get('modifiers', [])
+        print(delivery_methods)
+        print(product_modifiers)
         # Convert the delivery methods to the new format
         new_delivery_methods = []
         for method in delivery_methods:
-            if method == 'Local Pickup':
-                new_delivery_methods.append(1)
-            elif method == 'Delivery':
-                new_delivery_methods.append(2)
+            method_type = method["type"]
+            if method_type == 'Local pickup':
+                insert_delivery_methods_query = text(
+                    'INSERT INTO product_delivery_methods (product_id, delivery_method_id) '
+                    'VALUES (:product_id, :method)'
+                )
+                connection.execute(insert_delivery_methods_query, {'product_id': id, 'method': 1})
+            elif method_type == 'Delivery':
+                try:
+                    int(method['range'])
+                    print(method['range'])
+                    print("range")
+                except ValueError:
+                    return False
             else:
-                new_delivery_methods.append(3)
+                insert_delivery_methods_query = text(
+                    'INSERT INTO product_delivery_methods (product_id, delivery_method_id) '
+                    'VALUES (:product_id, :method)'
+                )
+                connection.execute(insert_delivery_methods_query, {'product_id': id, 'method': 2})
 
         if not (title and price):
             return {'error': 'Required fields: title, price'}, 400
@@ -37,23 +54,22 @@ def create_product(request: flask.Request):
         if not isinstance(price, (int, float)):
             return {'error': 'Price must be a numerical value'}, 400
 
-        if stock is not None and not isinstance(stock, int):
-            return {'error': 'Stock must be an integer value'}, 400
+        # if stock is not None and not isinstance(stock, int):
+        #     return {'error': 'Stock must be an integer value'}, 400
 
-        if len(new_delivery_methods) == 0:
-            return {'error': 'Must have at least one delivery method'}, 400
+        # if len(new_delivery_methods) == 0:
+        #     return {'error': 'Must have at least one delivery method'}, 400
 
         insert_product_query = text(
-            'INSERT INTO products (title, description, price, stock, seller_id) '
-            'VALUES (:title, :description, :price, :stock, :seller_id) '
-            'RETURNING id'
+            'INSERT INTO products (id, title,  price,  seller_id) '
+            'VALUES (:id, :title, :price, :seller_id) '
+            
         )
 
         product_values = {
+            'id' : id,
             'title': title,
-            'description': description,
             'price': price,
-            'stock': stock,
             'seller_id': seller_id,
         }
 
@@ -61,15 +77,34 @@ def create_product(request: flask.Request):
 
         try:
             result = connection.execute(insert_product_query, product_values)
-            product_id = result.fetchone()[0]
+            # product_id = result.fetchone()[0]
 
-            for method in new_delivery_methods:
-                insert_delivery_methods_query = text(
-                    'INSERT INTO product_delivery_methods (product_id, delivery_method_id) '
-                    'VALUES (:product_id, :method)'
-                )
-                connection.execute(insert_delivery_methods_query, {'product_id': product_id, 'method': method})
-
+            # for method in new_delivery_methods:
+            #     insert_delivery_methods_query = text(
+            #         'INSERT INTO product_delivery_methods (product_id, delivery_method_id) '
+            #         'VALUES (:product_id, :method)'
+            #     )
+            #     connection.execute(insert_delivery_methods_query, {'product_id': product_id, 'method': method})
+            for method in delivery_methods:
+                method_type = method["type"]
+                if method_type == 'Local pickup':
+                    insert_delivery_methods_query = text(
+                        'INSERT INTO product_delivery_methods (product_id, delivery_method_id) '
+                        'VALUES (:product_id, :method)'
+                    )
+                    connection.execute(insert_delivery_methods_query, {'product_id': id, 'method': 1})
+                elif method_type == 'Delivery':
+                    insert_delivery_methods_query = text(
+                        'INSERT INTO product_delivery_methods (product_id, delivery_method_id, delivery_range) '
+                        'VALUES (:product_id, :method, :range)'
+                    )
+                    connection.execute(insert_delivery_methods_query, {'product_id': id, 'method': 1, 'range' : int(method['range'])})
+                else:
+                    insert_delivery_methods_query = text(
+                        'INSERT INTO product_delivery_methods (product_id, delivery_method_id) '
+                        'VALUES (:product_id, :method)'
+                    )
+                    connection.execute(insert_delivery_methods_query, {'product_id': id, 'method': 2})
             for mod in product_modifiers:
                 modifier_type = mod['modifier_type']
                 name = mod['name']

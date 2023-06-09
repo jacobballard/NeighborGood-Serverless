@@ -1,77 +1,49 @@
-# from functools import wraps
-# from flask import request, jsonify, globals
-# from firebase_admin import auth
-# from functools import wraps
-
-# user = None
-# user_data = None
-
-# def is_authenticated_wrapper(all_anonymous_users=True):
-#     def decorator(f):
-#         @wraps(f)
-#         def wrapper(request, *args, **kwargs):
-#             token = request.headers.get('Authorization')
-#             if not token:
-#                 return jsonify({'error': 'No token provided'}), 401
-
-#             try:
-#                 user = auth.verify_id_token(token)
-#                 if not all_anonymous_users and user.get('sign_in_provider') == 'anonymous':
-#                     return jsonify({'error': 'Anonymous user'}), 401
-
-#                 kwargs['user'] = user
-#             except Exception as e:
-#                 return jsonify({'error': 'Invalid token'}), 401
-
-#             return f(request, *args, **kwargs)
-#         return wrapper
-#     return decorator
-
-
-# def has_required_role(required_role):
-#     def decorator(f):
-#         @wraps(f)
-        
-#         def wrapper(request, *args, **kwargs):
-#             user = kwargs.pop('user', None)
-#             if not user:
-#                 return jsonify({'error': 'User information not found'}), 401
-
-#             from .firestore_db import db
-#             user_ref = db.collection('users').document(user['uid'])
-#             user_data = user_ref.get().to_dict()
-
-#             if not user_data or user_data.get('role') != required_role:
-#                 return jsonify({'error': 'Unauthorized'}), 403
-
-#             return f(request, *args, **kwargs)
-#         return wrapper
-#     return decorator
 from functools import wraps
 from flask import request, jsonify, g
 import firebase_admin
-from firebase_admin import credentials
-from firebase_admin import auth
+from firebase_admin import credentials, exceptions, auth
 
-cred = credentials.Certificate('/Users/jacobballard/Desktop/NeighborGood/Serverless/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
-firebase_admin.initialize_app(cred)
+# cred = credentials.Certificate('/Users/jacobballard/Desktop/NeighborGood/Serverless/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
+
+
+
+
+try:
+    firebase_admin.get_app()
+except:
+    firebase_admin.initialize_app()
 
 def is_authenticated_wrapper(all_anonymous_users=True):
     def decorator(f):
         @wraps(f)
         def wrapper(request):
-            token = request.headers.get('Authorization')
+
+            if request.method == 'OPTIONS':
+            # This is a preflight request. Reply successfully:
+                headers = {
+                    'Access-Control-Allow-Origin': '*',  # Or the specific origin you want to allow
+                    'Access-Control-Allow-Methods': 'POST',  # Or the methods you want to allow
+                    'Access-Control-Allow-Headers': 'Content-Type,Authorization',  # Or the headers you want to allow
+                }
+                return ('', 204, headers)
+            
+            token = request.headers.get('authorization')
+            test = request.headers
+            
+
+            print(test)
             if not token:
+                print("oh no")
                 return jsonify({'error': 'No token provided'}), 401
 
             print(token[7:])
             print("token wrapper worked")
             try:
                 user = auth.verify_id_token(token[7:])
-                
+                print(user)
                 print("booya")
-                print(user.email)
-                if not all_anonymous_users and user.get('sign_in_provider') == 'anonymous':
+                # print(user.email)
+                if not all_anonymous_users and user.get('provider_id') == 'anonymous':
                     return jsonify({'error': 'Anonymous user'}), 401
 
                 g.user = user
@@ -88,6 +60,7 @@ def has_required_role(required_role):
     def decorator(f):
         @wraps(f)
         def wrapper(request):
+            print("inside")
             if not g.user:
                 return jsonify({'error': 'User information not found'}), 401
 

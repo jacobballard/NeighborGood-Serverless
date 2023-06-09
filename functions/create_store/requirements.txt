@@ -2,3 +2,5 @@ firebase-admin==6.1.0
 google-cloud-firestore==2.11.1
 sqlalchemy==2.0.12
 Flask==2.0.2
+stripe==5.4.0
+pg8000==1.29.6
