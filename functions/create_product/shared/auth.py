@@ -3,7 +3,7 @@ from flask import request, jsonify, g
 import firebase_admin
 from firebase_admin import credentials, exceptions, auth
 
-cred = credentials.Certificate('/Users/jacobballard/Desktop/neighborgood/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
+# cred = credentials.Certificate('/Users/jacobballard/Desktop/neighborgood/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
 
 
 headers = {
@@ -15,7 +15,7 @@ headers = {
 try:
     firebase_admin.get_app()
 except:
-    firebase_admin.initialize_app(credential=cred)
+    firebase_admin.initialize_app()
 
 def is_authenticated_wrapper(all_anonymous_users=True):
     def decorator(f):

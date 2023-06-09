@@ -3,10 +3,14 @@ from flask import request, jsonify, g
 import firebase_admin
 from firebase_admin import credentials, exceptions, auth
 
-# cred = credentials.Certificate('/Users/jacobballard/Desktop/NeighborGood/Serverless/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
+# cred = credentials.Certificate('/Users/jacobballard/Desktop/neighborgood/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
 
 
-
+headers = {
+    'Access-Control-Allow-Origin': '*',  # Or the specific origin you want to allow
+    'Access-Control-Allow-Methods': 'POST,GET',  # Or the methods you want to allow
+    'Access-Control-Allow-Headers': 'Content-Type,Authorization',  # Or the headers you want to allow
+}
 
 try:
     firebase_admin.get_app()
@@ -20,11 +24,7 @@ def is_authenticated_wrapper(all_anonymous_users=True):
 
             if request.method == 'OPTIONS':
             # This is a preflight request. Reply successfully:
-                headers = {
-                    'Access-Control-Allow-Origin': '*',  # Or the specific origin you want to allow
-                    'Access-Control-Allow-Methods': 'POST,GET',  # Or the methods you want to allow
-                    'Access-Control-Allow-Headers': 'Content-Type,Authorization',  # Or the headers you want to allow
-                }
+                
                 return ('', 204, headers)
             
             token = request.headers.get('authorization')

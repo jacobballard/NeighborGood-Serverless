@@ -4,8 +4,10 @@ from flask import jsonify
 import functions_framework
 import os
 from sqlalchemy import text
-from shared import database
+from shared.sql_db import db as database
+from shared.auth import is_authenticated_wrapper, headers
 
+@is_authenticated_wrapper(True)
 @functions_framework.http
 def get_all_products(request: flask.Request):
     request_data = request.get_json()
@@ -16,32 +18,44 @@ def get_all_products(request: flask.Request):
     filter_delivery = request_data.get('filter_delivery', False)
     filter_pickup = request_data.get('filter_pickup', False)
 
-    connection = database.db.connect()
+    connection = database.connect()
 
     # Get products based on filters
     query = text((
-        "SELECT products.*, sellers.lat, sellers.lng, sellers.delivery_radius "
+        "SELECT products.*, sellers.latitude, sellers.longitude "
         "FROM products "
         "JOIN sellers ON products.seller_id = sellers.id "
-        "JOIN product_delivery_methods ON products.id = product_delivery_methods.product_id "
-        "JOIN delivery_methods ON product_delivery_methods.delivery_method_id = delivery_methods.id "
+        "JOIN product_delivery_method ON products.id = product_delivery_method.product_id "
+        "JOIN delivery_method ON product_delivery_method.delivery_method_id = delivery_method.id "
         "WHERE "
-        "(:filter_shipping AND delivery_methods.method_name = 'Shipping') "
-        "OR (:filter_delivery AND delivery_methods.method_name = 'Delivery' AND haversine(:lat, :lng, sellers.lat, sellers.lng) <= sellers.delivery_radius) "
-        "OR (:filter_pickup AND delivery_methods.method_name = 'Pickup' AND haversine(:lat, :lng, sellers.lat, sellers.lng) <= :radius)"
+        "((:filter_shipping AND delivery_method.id = 2)"
+    "OR (:filter_delivery AND delivery_method.id = 3 AND haversine(:lat, :lng, sellers.latitude, sellers.longitude) <= product_delivery_method.delivery_range)"
+    "OR (:filter_pickup AND delivery_method.id = 1 AND haversine(:lat, :lng, sellers.latitude, sellers.longitude) <= :radius))"
     ))
 
-    products_data = connection.execute(query, {
-        'lat': lat,
-        'lng': lng,
-        'radius': radius,
-        'filter_shipping': filter_shipping,
-        'filter_delivery': filter_delivery,
-        'filter_pickup': filter_pickup
-    }).fetchall()
+    # products_data = connection.execute(query, {
+    #     'lat': lat,
+    #     'lng': lng,
+    #     'radius': radius,
+    #     'filter_shipping': filter_shipping,
+    #     'filter_delivery': filter_delivery,
+    #     'filter_pickup': filter_pickup
+    # }).fetchall()
+    # print(products_data)
+    # products = [dict(row.items()) for row in products_data]
+    result_proxy = connection.execute(query, {
+    'lat': lat,
+    'lng': lng,
+    'radius': radius,
+    'filter_shipping': filter_shipping,
+    'filter_delivery': filter_delivery,
+    'filter_pickup': filter_pickup
+})
 
-    products = [dict(zip(product.keys(), product)) for product in products_data]
+    column_names = result_proxy.keys()
+    products_data = result_proxy.fetchall()
+    products = [dict(zip(column_names, row)) for row in products_data]
 
     connection.close()
 
-    return {'products': products}, 200
+    return ({'products': products}, 200, headers)
