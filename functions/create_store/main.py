@@ -7,7 +7,6 @@ import stripe
 from shared.firestore_db import db as firestore_db
 from shared.sql_db import db as sql_db
 from shared.auth import is_authenticated_wrapper, has_required_role, headers
-from shared.cors import add_cors_headers
 from shared.returned import json_abort
 stripe.api_key = os.getenv("STRIPE_API_KEY")
 geocoding_key = os.getenv("GEOCODING_KEY")
@@ -187,8 +186,21 @@ def create_store(request: flask.Request):
                     "transfers": {"requested": True},
                 },
             )
+            print("done here")
+            print(stripe_account)
            
-            
+            stripe_account_id = stripe_account["id"]
+
+            # Retrieve the Stripe account
+            account = stripe.Account.retrieve(stripe_account_id)
+
+            # Get the fields needed for verification
+            fields_needed = account['requirements']['currently_due']
+
+            # Print the fields needed for verification
+            print('needed fields!!!JBB!OUBOIBO _______++++++--------_!!!')
+            print(fields_needed)
+
 
             
             
@@ -207,6 +219,7 @@ def create_store(request: flask.Request):
             user_ref.set({
                 "role" : "seller",
                 u'stripe_connect_account_id': stripe_account["id"],
+                u'stripe_onboarding_requirements' : fields_needed,
             }, merge=True)
 
 

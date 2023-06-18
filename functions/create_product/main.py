@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, text
 from shared.sql_db import db as sql_db
 from shared.firestore_db import db as firestore_db
 from shared.auth import is_authenticated_wrapper, has_required_role, headers
+import uuid
 
 @is_authenticated_wrapper(False)
 @has_required_role("seller")
@@ -28,6 +29,13 @@ def create_product(request: flask.Request):
         product_modifiers = request_data.get('modifiers', [])
         print(delivery_methods)
         print(product_modifiers)
+
+        for modifier in product_modifiers:
+            modifier['id'] = str(uuid.uuid4())
+            if modifier['type'] == 'multi_choice':
+                for choice in modifier['choices']:
+                    choice['id'] = str(uuid.uuid4())
+        
         # Convert the delivery methods to the new format
         new_delivery_methods = []
         # for method in delivery_methods:
@@ -196,7 +204,7 @@ def create_product(request: flask.Request):
             doc_ref.set({
                 u'title' : title,
                 u'description' : description,
-                u'price' : int(price),
+                u'price' : float(price),
                 u'delivery_methods' : delivery_methods,
                 u'modifiers' : product_modifiers
             }, merge = True)

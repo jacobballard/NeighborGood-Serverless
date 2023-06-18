@@ -9,7 +9,7 @@ from shared.auth import is_authenticated_wrapper, headers
 
 @is_authenticated_wrapper(True)
 @functions_framework.http
-def get_all_products(request: flask.Request):
+def get_products(request: flask.Request):
     request_data = request.get_json()
     lat = request_data.get('lat')
     lng = request_data.get('lng')
@@ -30,7 +30,9 @@ def get_all_products(request: flask.Request):
         "WHERE "
         "((:filter_shipping AND delivery_method.id = 2)"
     "OR (:filter_delivery AND delivery_method.id = 3 AND haversine(:lat, :lng, sellers.latitude, sellers.longitude) <= product_delivery_method.delivery_range)"
-    "OR (:filter_pickup AND delivery_method.id = 1 AND haversine(:lat, :lng, sellers.latitude, sellers.longitude) <= :radius))"
+    "OR (:filter_pickup AND delivery_method.id = 1 AND haversine(:lat, :lng, sellers.latitude, sellers.longitude) <= :radius)) "
+    "GROUP BY products.id, sellers.latitude, sellers.longitude;"
+    
     ))
 
     # products_data = connection.execute(query, {
@@ -54,7 +56,9 @@ def get_all_products(request: flask.Request):
 
     column_names = result_proxy.keys()
     products_data = result_proxy.fetchall()
+    print(products_data)
     products = [dict(zip(column_names, row)) for row in products_data]
+    print(products)
 
     connection.close()
 
