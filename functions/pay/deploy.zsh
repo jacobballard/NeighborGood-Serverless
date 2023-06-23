@@ -24,24 +24,22 @@ done
 # source $HOME/Desktop/neighborgood/sql_db_config.txt
 
 STRIPE_KEY=$(</Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/stripe_key.txt)
-GEOCODING_KEY=$(</Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/google_maps_geocoding.txt)
-source /Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/sql_db_config.txt
 
 
 if $RUN_LOCALLY; then
   # Command to run locally using functions-framework
   # Copy contents from shared_local to shared
   export STRIPE_API_KEY=$STRIPE_KEY
-  export GEOCODING_KEY=$GEOCODING_KEY
+#   export GEOCODING_KEY=$GEOCODING_KEY
   pip install -r requirements.txt
   cp -r ./../shared_local/* ./shared
-  functions-framework --target create_store --debug --port 8085
+  functions-framework --target pay --debug --port 8090
 else
   cp -r ./../shared ./
 
-  gcloud functions deploy create_store \
+  gcloud functions deploy pay \
     --runtime python310 \
     --trigger-http \
     --allow-unauthenticated \
-    --set-env-vars STRIPE_API_KEY=$STRIPE_KEY,GEOCODING_KEY=$GEOCODING_KEY,DB_USER=$DB_USER,DB_PASS=$DB_PASS,DB_NAME=$DB_NAME,INSTANCE_UNIX_SOCKET=$INSTANCE_UNIX_SOCKET
+    --set-env-vars STRIPE_API_KEY=$STRIPE_KEY
 fi

@@ -1,9 +1,18 @@
 #!/bin/zsh
 
-STRIPE_KEY=$(<$HOME/Desktop/neighborgood/stripe_key.txt)
-GEOCODING_KEY=$(<$HOME/Desktop/neighborgood/google_maps_geocoding.txt)
+# ## Mac Mini:
+# STRIPE_KEY=$(<$HOME/Desktop/neighborgood/stripe_key.txt)
 
-source $HOME/Desktop/neighborgood/sql_db_config.txt
+# # Actual path...
+# # /Users/jacobballard/Library/Mobile Documents/com~apple~CloudDocs/Desktop/neighborgood/stripe_key.txt
+# GEOCODING_KEY=$(<$HOME/Desktop/neighborgood/google_maps_geocoding.txt)
+
+# source $HOME/Desktop/neighborgood/sql_db_config.txt
+
+STRIPE_KEY=$(</Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/stripe_key.txt)
+GEOCODING_KEY=$(</Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/google_maps_geocoding.txt)
+source /Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/sql_db_config.txt
+
 
 # Variables
 RUN_LOCALLY=false

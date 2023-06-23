@@ -1,22 +1,23 @@
 import os
 import stripe
-from shared.sql_db import db
+from shared.firestore_db import db
 from flask import jsonify, request
 from collections import defaultdict
 
 
 stripe.api_key = os.environ['STRIPE_SECRET_KEY']
 
-def create_payment_intent(request):
+def pay(request):
     data = request.get_json()
 
-    customer_id = data['customer_id']  # Replace with the customer's Stripe ID
-    product_ids = data['product_ids']  # List of product IDs to purchase
+    # customer_id = data['customer_id']  # Replace with the customer's Stripe ID
+    # product_ids = data['product_ids']  # List of product IDs to purchase
+    print(data)
 
     # Fetch product prices from the SQL products table
-    connection = db.connect()
-    cursor = connection.cursor()
-    cursor.execute("SELECT id, seller_account_id, price FROM products WHERE id IN (%s)" % ','.join(['%s']*len(product_ids)), product_ids)
+    # connection = db.connect()
+    # cursor = connection.cursor()
+    # cursor.execute("SELECT id, seller_account_id, price FROM products WHERE id IN (%s)" % ','.join(['%s']*len(product_ids)), product_ids)
 
     # Calculate amount owed to each seller
     sellers_amount = defaultdict(int)
@@ -40,7 +41,7 @@ def create_payment_intent(request):
 
         # Create separate transfers for each seller
         for seller_account_id, amount in sellers_amount.items():
-            your_fee = int(amount * 0.03)
+            your_fee = int(amount * 0.05)
             transfer = stripe.Transfer.create(
                 amount=amount,
                 currency='usd',

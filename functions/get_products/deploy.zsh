@@ -18,7 +18,8 @@ do
 done
 
 # Read Stripe secret key from file
-source $HOME/Desktop/neighborgood/sql_db_config.txt
+# source $HOME/Desktop/neighborgood/sql_db_config.txt
+source /Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/sql_db_config.txt
 
 if $RUN_LOCALLY; then
     # Command to run locally using functions-framework
