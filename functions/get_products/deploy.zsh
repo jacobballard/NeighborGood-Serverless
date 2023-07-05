@@ -1,7 +1,6 @@
 #!/bin/zsh
-
-# Variables
 RUN_LOCALLY=false
+LAPTOP=false
 
 # Loop through arguments
 for arg in "$@"
@@ -12,15 +11,28 @@ do
         shift # Remove --run_locally from processing
         ;;
         *)
-        shift # Remove generic argument from processing
+        # shift # Remove generic argument from processing
+        # ;;
+    esac
+    case $arg in
+        --laptop)
+        LAPTOP=true
+        shift # Remove --run_locally from processing
         ;;
+        *)
+        # shift # Remove generic argument from processing
+        # ;;
     esac
 done
 
-# Read Stripe secret key from file
-# source $HOME/Desktop/neighborgood/sql_db_config.txt
-source /Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/sql_db_config.txt
 
+# Read Stripe secret key from file
+
+if $LAPTOP; then
+    source /Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/sql_db_config.txt
+else
+    source $HOME/Desktop/neighborgood/sql_db_config.txt
+fi
 if $RUN_LOCALLY; then
     # Command to run locally using functions-framework
     # Copy contents from shared_local to shared

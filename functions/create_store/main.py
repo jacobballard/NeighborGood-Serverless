@@ -7,53 +7,85 @@ import stripe
 from shared.firestore_db import db as firestore_db
 from shared.sql_db import db as sql_db
 from shared.auth import is_authenticated_wrapper, has_required_role, headers
-from shared.returned import json_abort
+
 stripe.api_key = os.getenv("STRIPE_API_KEY")
 geocoding_key = os.getenv("GEOCODING_KEY")
 
-
+taxcloud_login_id = os.environ['TAXCLOUD_LOGIN_ID']
+taxcloud_api_key = os.environ['TAXCLOUD_API_KEY']
+def check(tc, data, order):
+        del(tc['ErrNumber'])
+        del(tc['ErrDescription'])
+        if tc['Address2'] is None:
+            tc['Address2'] = ''
+        if data['Address1'] == tc['Address1'] and data['Address2'] == tc['Address2'] and data['City'] == tc['City'] and data['State'] == tc['State'] and data['Zip5'] == tc['Zip5'] and data['Zip4'] == tc['Zip4']:
+            print('yay')
+            return None
+        else:
+            print('return suggested addresss')
+            return  tc
 @is_authenticated_wrapper(False)
 @has_required_role("buyer")
 @functions_framework.http
 def create_store(request: flask.Request):
 
-    # if request.method == 'OPTIONS':
-    # # This is a preflight request. Reply successfully:
-    #     headers = {
-    #         'Access-Control-Allow-Origin': '*',  # Or the specific origin you want to allow
-    #         'Access-Control-Allow-Methods': 'POST',  # Or the methods you want to allow
-    #         'Access-Control-Allow-Headers': 'Content-Type,Authorization',  # Or the headers you want to allow
-    #     }
-    #     return ('', 204, headers)
-
-
-    print("then create storea")
     if request.method == 'POST':
         print("iniside")
         user = flask.g.user
         print("User")
         print(user)
-        user_data = flask.g.user_data
+        # user_data = flask.g.user_data
         request_data = request.get_json()
 
+        
 
-        # TODO : Call stripe api for connected custom account in us with transfer capability.
-
-        # stripe_account_id = create_stripe_account(user_data)
-        # if 'error' in stripe_account_id:
-        #     return stripe_account_id
-        # This should be interpreted from jwt later 
-        # id = request_data.get('id')
         id = user['user_id']
 
         title = request_data.get('title')
         description = request_data.get('description', None)
-        # latitude = request_data.get('latitude')
-        # longitude = request_data.get('longitude')
 
-        address = request_data.get('address')
-        if address is None:
-            return {'error': 'Required fields: address'}, 400
+        address = request_data['address']
+
+        
+        
+        url = 'https://api.taxcloud.net/1.0/TaxCloud/VerifyAddress'
+        
+
+        print("address billing")
+        print(address)
+        if len(address['zip']) > 5:
+            address['zip5'] = address['zip'].split("-")[0]
+            address['zip4'] = address['zip'].split("-")[1]
+        elif len(address['zip']) == 5:
+            address['zip5'] = address['zip']
+            address['zip4'] = ''
+        else:
+            return (headers, flask.jsonify({'error':'should never get this'}), 400)
+       
+        addr_data = {
+            "Address1": address['address_line_1'],
+            "Address2": address['address_line_2'],
+            "City": address['city'],
+            "State": address['state'],
+            "Zip5": address['zip5'],
+            "Zip4": address['zip4'],
+            "apiKey": taxcloud_api_key,
+            "apiLoginID": taxcloud_login_id
+        }
+
+        response_first = requests.post(url=url, json=addr_data)
+
+        tc_data_billing = response_first.json()
+        
+        tc_check1_data = check(tc_data_billing, addr_data, 1)
+        return_resp = {'code' : 'suggested_address'}
+        if tc_check1_data is not None:
+            return_resp['suggested_address'] = tc_check1_data
+            
+            return flask.jsonify(return_resp), 200, headers
+            
+        
+
 
         address_line_1 = address.get('address_line_1') or ''
         address_line_2 = address.get('address_line_2') or ''
@@ -203,13 +235,18 @@ def create_store(request: flask.Request):
 
 
             
+
+            del(addr_data['apiKey'])
+            del(addr_data['apiLoginID'])
             
             doc_ref = firestore_db.collection(u'stores').document(id)
             doc_ref.set({
                 u'title' : title,
                 u'description' : description,
+                u'latitude': latitude,
+                u'longitude': longitude,
                 
-                u'address' : address,
+                u'address' : addr_data,
                 u'delivery_methods' : delivery_methods,
 
             }, merge=True)

@@ -199,7 +199,7 @@ def create_product(request: flask.Request):
             return {'error': str(e)}, 500
         
         try:
-            doc_ref = firestore_db.collection(u'users').document(seller_id).collection(u'products').document(id)
+            doc_ref = firestore_db.collection(u'stores').document(seller_id).collection(u'products').document(id)
 
             doc_ref.set({
                 u'title' : title,
