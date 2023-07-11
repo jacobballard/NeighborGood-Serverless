@@ -38,8 +38,8 @@ def create_store(request: flask.Request):
         request_data = request.get_json()
 
         
-
         id = user['user_id']
+        
 
         title = request_data.get('title')
         description = request_data.get('description', None)

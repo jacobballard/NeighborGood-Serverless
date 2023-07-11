@@ -36,6 +36,7 @@ fi
 if $RUN_LOCALLY; then
     # Command to run locally using functions-framework
     # Copy contents from shared_local to shared
+    pip install -r requirements.txt
     cp -r ./../shared_local/* ./shared
     functions-framework --target get_products --debug --port 8083
 else

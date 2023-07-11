@@ -62,4 +62,4 @@ def get_products(request: flask.Request):
 
     connection.close()
 
-    return ({'products': products}, 200, headers)
+    return (jsonify({'products': products}), 200, headers)

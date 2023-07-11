@@ -3,7 +3,8 @@ from flask import request, jsonify, g
 import firebase_admin
 from firebase_admin import credentials, exceptions, auth
 
-cred = credentials.Certificate('/Users/jacobballard/Library/Mobile Documents/com~apple~CloudDocs/Desktop/neighborgood/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
+cred= credentials.Certificate('/Users/jacobballard/Desktop/neighborgood/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
+# cred = credentials.Certificate('/Users/jacobballard/Library/Mobile Documents/com~apple~CloudDocs/Desktop/neighborgood/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
 
 
 headers = {

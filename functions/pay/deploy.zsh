@@ -35,6 +35,8 @@ if $LAPTOP; then
 else
   ## Mac Mini:
   STRIPE_KEY=$(<$HOME/Desktop/neighborgood/stripe_key.txt)
+  TAXCLOUD_KEY=$(</Users/jacobballard/Desktop/neighborgood/taxcloud_key.txt)
+  TAXCLOUD_LOGIN=$(</Users/jacobballard/Desktop/neighborgood/taxcloud_login.txt)
 fi
 
 if $RUN_LOCALLY; then

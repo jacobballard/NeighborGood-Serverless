@@ -41,6 +41,8 @@ else
   # Actual path...
   # /Users/jacobballard/Library/Mobile Documents/com~apple~CloudDocs/Desktop/neighborgood/stripe_key.txt
   GEOCODING_KEY=$(<$HOME/Desktop/neighborgood/google_maps_geocoding.txt)
+  TAXCLOUD_KEY=$(</Users/jacobballard/Desktop/neighborgood/taxcloud_key.txt)
+  TAXCLOUD_LOGIN=$(</Users/jacobballard/Desktop/neighborgood/taxcloud_login.txt)
 
   source $HOME/Desktop/neighborgood/sql_db_config.txt
 fi

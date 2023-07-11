@@ -1,9 +1,12 @@
 import os
+import uuid
 import stripe
 from shared.firestore_db import db
 import functions_framework
+import flask
 from flask import jsonify, request
 import requests
+import json
 from collections import defaultdict
 from shared.auth import is_authenticated_wrapper, headers
 
@@ -23,7 +26,7 @@ def check(tc, data, order):
             print('return suggested addresss')
             return  tc
 
-def sum_modifier(modifiers, modifiers_selections, sellers, seller_key, quantity):
+def sum_modifier(modifiers, modifiers_selections, sellers, seller_key, quantity, index):
     print('sum')
     print(modifiers)
     print(modifiers_selections)
@@ -46,25 +49,25 @@ def sum_modifier(modifiers, modifiers_selections, sellers, seller_key, quantity)
                             if choice['id'] == input_id:
                                 flag = True
                                 if choice['price'] != "":
-                                    sellers[seller_key] += float(choice['price']) * quantity
-                                
+                                    sellers[seller_key]['price'] += float(choice['price']) * quantity
+                                    sellers[seller_key]['products'][index]['Price'] += float(choice['price'])
                     else:
                         flag = True
                         price = modifier['price']
                         
                         if price != "":
-                            sellers[seller_key] += float(price) * quantity
+                            sellers[seller_key]['price'] += float(price) * quantity
         if mod_required and not flag:
             return (jsonify({'code': 'modifier selection required'}), 400, headers)                
 @is_authenticated_wrapper(True)
 @functions_framework.http
 def pay(request):
     data = request.get_json()
-
+    customer_id = flask.g.user['user_id']
     # customer_id = data['customer_id']  # Replace with the customer's Stripe ID
     # product_ids = data['product_ids']  # List of product IDs to purchase
     print(data)
-
+    stripe_customer_id = db.collection(u'users').document(customer_id).get().get('stripe_customer_id')
     sellers = dict()
     seller_stripe_ids = dict()
 
@@ -98,37 +101,72 @@ def pay(request):
         dm = item['delivery_method']
         delivery_method_price = 0.0
         delivery_methods = db.collection(u'stores').document(seller_key).collection(u'products').document(product_key).get().get('delivery_methods')
-
+        is_shipping = False
         found_dm = False
         for method in delivery_methods:
             if dm == method['type']:
                 found_dm = True
-                if dm != 'Local pickup':
+                if dm == 'Shipping':
+                    is_shipping = True
                     delivery_method_price = float(method['fee'])
-                
-                
-            
         
-        modifiers = db.collection(u'stores').document(seller_key).collection(u'products').document(product_key).get().get('modifiers')
-        seller_stripe_ids = db.collection(u'users').document(seller_key).get().get('stripe_connect_account_id')
-        print(seller_stripe_ids)
-        print('stripe id')
-        if seller_key in sellers:
-            sellers[seller_key] += quantity * float(db.collection(u'users').document(seller_key).collection(u'products').document(product_key).get().get('price'))
-            print(sellers)
+        if not found_dm:
+            return jsonify({'error' : 'no such shipping method exists'}), 400, headers
+                
+        
             
+        product = db.collection(u'stores').document(seller_key).collection(u'products').document(product_key).get()
+
+        modifiers = db.collection(u'stores').document(seller_key).collection(u'products').document(product_key).get().get('modifiers')
+        
+        print(sellers)
+        # print(seller_stripe_ids)
+        # print('stripe id')
+        index = None
+        if seller_key in sellers:
+            sellers[seller_key]['price'] += quantity * float(db.collection(u'users').document(seller_key).collection(u'products').document(product_key).get().get('price'))
+            sellers[seller_key]['shipping_fee'] += delivery_method_price if is_shipping else 0.0
+            sellers[seller_key]['price'] += (quantity * delivery_method_price) if not is_shipping else 0.0
+            sellers[seller_key]['dms'].add(dm)
+            index = len(sellers[seller_key]['products'])
+            sellers[seller_key]['products'].append(dict({
+                "Index" : index,
+                "ItemID" : product_key,
+                "TIC" : 41030,
+                "Price": product['price']/quantity,
+                "Qty": quantity
+            }))
         else:
-            sellers[seller_key] = quantity * float(db.collection(u'users').document(seller_key).collection(u'products').document(product_key).get().get('price'))
-        # sellers[seller_key] += 
-        sum_modifier(modifiers=modifiers, modifiers_selections=modifiers_selections, sellers=sellers, seller_key=seller_key, quantity=quantity)
+            index = 0
+            sellers[seller_key] = dict({
+                'price' :quantity * (float(db.collection(u'stores').document(seller_key).collection(u'products').document(product_key).get().get('price')) + delivery_method_price if not is_shipping else 0.0), 
+                'shipping_fee' : delivery_method_price if is_shipping else 0.0,
+                'dms':set({dm}), 
+                'taxes' :0.0,
+                'stripe_connect_account_id' : db.collection(u'users').document(seller_key).get().get('stripe_connect_account_id'),
+                'products': [dict({
+                "Index" : index,
+                "ItemID" : product_key,
+                "TIC" : 41030,
+                "Price": product.get('price')/quantity,
+                "Qty": quantity
+                })]
+            })
+        # sellers[seller_key] += delivery_method_price
+        sum_modifier(modifiers=modifiers, modifiers_selections=modifiers_selections, sellers=sellers, seller_key=seller_key, quantity=quantity, index=index)
     # print(sellers)
     # subtotal = sum(sellers.values())
     # platform_fee_percent = 0.05
     
+        
+        
+
+
+    
     # for seller in sellers:
     #     sellers[seller] *= 0.98
     
-    platform_fee = subtotal - sum(sellers.values()) + (subtotal * platform_fee_percent)
+    # platform_fee = subtotal - sum(sellers.values()) + (subtotal * platform_fee_percent)
 
 
     # total = (subtotal * 1.06) + platform_fee
@@ -146,7 +184,7 @@ def pay(request):
 #     "apiLoginID": "string"
 # }
     
-    url = 'https://api.taxcloud.net/1.0/TaxCloud/VerifyAddress'
+    verify_url = 'https://api.taxcloud.net/1.0/TaxCloud/VerifyAddress'
     address_billing = data['address_billing']
 
     print("address billing")
@@ -193,16 +231,16 @@ def pay(request):
     }
 
     
-    response_first = requests.post(url=url, json=data_billing)
+    response_first = requests.post(url=verify_url, json=data_billing)
 
     response_second = ""
-    tc_check2_data = ""
+    tc_check2_data = None
     print("sbaoibdasbdas data billing")
     print(data_billing)
     print(data_shipping)
     if data_billing != data_shipping:
         print('oh no')
-        response_second = requests.post(url=url, json=data_shipping)
+        response_second = requests.post(url=verify_url, json=data_shipping)
         tc_data_shipping = response_second.json()
         tc_check2_data = check(tc_data_shipping, data_shipping, 2)
     print("response")
@@ -224,10 +262,14 @@ def pay(request):
             return jsonify(return_resp), 200, headers
     else:
         if tc_check2_data is not None:
-
+            print("tccheck2data not none")
+            print(tc_check2_data)
+            # TODO: Make this shipping?
             return_resp['2'] = tc_check2_data
             print(return_resp)
             return jsonify(return_resp), 200, headers
+        else:
+            print("else")
     
 
 
@@ -235,83 +277,106 @@ def pay(request):
 
     #https://api.taxcloud.net/1.0/TaxCloud/Lookup
 
-
-    
-    
-    
-
-
-
-    #     # Create the payment intent
-    # payment_intent = stripe.PaymentIntent.create(
-    #     amount=total_amount,
-    #     currency='usd',
-    #     customer=customer_id,
-    #     payment_method_types=['card'],
-    # )
-
-    # # Create separate transfers for each seller
-    # for seller_account_id, amount in sellers_amount.items():
-    #     transfer = stripe.Transfer.create(
-    #         amount=amount,
-    #         currency='usd',
-    #         destination=seller_account_id,
-    #     )
+    cart_id = str(uuid.uuid4())
+    # seller_taxes = dict()
+    lookup_url = 'https://api.taxcloud.net/1.0/TaxCloud/Lookup'
+    print('sellers')
+    print(sellers)
+    #seller_str = json.dumps(sellers, indent=4)
+    # print(seller_str)
+    for seller_key in sellers.keys():
+        print('seller key')
+        print(seller_key)
+        seller_address = db.collection(u'stores').document(seller_key).get().get('address')
+        request_body = dict({
+            "apiKey": taxcloud_api_key,
+            "apiLoginID": taxcloud_login_id,
+            "cartID" : cart_id,
+            "customerID" : customer_id,
+            "cartItems" : sellers[seller_key]['products']
+        })
+        if 'Shipping' in sellers[seller_key]['dms']:
+            request_body['cartItems'].append(dict({
+                "Index": len(request_body['cartItems']),
+                "ItemID" : "shipping",
+                "TIC": 10010,
+                "Price":sellers[seller_key]['shipping_fee'],
+                "Qty": 1
+                }))
+            
+        if 'Delivery' in sellers[seller_key]['dms']:
+            request_body['deliveredBySeller'] = True
+        else:
+            request_body['deliveredBySeller'] = False
+        print("seller address")
+        print(seller_address)
+        print(address_shipping)
+        origin = {
+            "Address1" : seller_address['Address1'],
+            'Address2' : seller_address['Address2'],
+            "City" : seller_address['City'],
+            "State" : seller_address['State'],
+            "Zip4" : seller_address['Zip4'],
+            "Zip5" : seller_address['Zip5']
+        }
+        request_body['origin'] = origin
+        destination = {
+            "Address1": address_shipping['address_line_1'],
+            "Address2": address_shipping['address_line_2'],
+            "City": address_shipping['city'],
+            "State": address_shipping['state'],
+            "Zip5": address_shipping['zip5'],
+            "Zip4": address_shipping['zip4'],
+        }
         
-    # # Transfer the platform fee to your own Stripe Connect account
-    # stripe.Transfer.create(
-    #     amount=int(platform_fee * 100),  # Stripe expects the amount in cents
-    #     currency='usd',
-    #     destination=os.environ['YOUR_STRIPE_ACCOUNT_ID'],
-    # )
+        request_body['destination'] = destination
+        # print(request_body)
+        json_str = json.dumps(request_body, indent=4)
+        print(json_str)
+        print('request body')
+        verify_response = requests.post(url=lookup_url,json=request_body).json()
+        print(verify_response)
+        print("verify")
+        
+        if verify_response['ResponseType'] == 3:
+            # response = verify_response['L
+            for item in verify_response['CartItemsResponse']:
+                sellers[seller_key]['taxes'] += float(item['TaxAmount'])
+    
+    subtotal = 0.0
+    taxes = 0.0
+    for sell in sellers.keys():
+        subtotal += sellers[sell]['price']
+        taxes += sellers[sell]['taxes']
+    
+    platform_fee = (.05 * subtotal) + (.02 * subtotal)
 
+    # seller_subtotal = subtotal * 0.98
 
+    total_charge = subtotal + platform_fee + taxes
+    total_charge *= 100
+    total_post_stripe_fee = total_charge - ((total_charge * 0.029) + 0.30)
+    remainder = total_post_stripe_fee
 
-    # Fetch product prices from the SQL products table
-    # connection = db.connect()
-    # cursor = connection.cursor()
-    # cursor.execute("SELECT id, seller_account_id, price FROM products WHERE id IN (%s)" % ','.join(['%s']*len(product_ids)), product_ids)
+    print('customer id')
+    print(customer_id)
+        # Create the payment intent
+    payment_intent = stripe.PaymentIntent.create(
+        amount=int(total_charge),
+        currency='usd',
+        customer=stripe_customer_id,
+        payment_method_types=['card'],
+        transfer_group=cart_id
+    )
 
-    # Calculate amount owed to each seller
-    # sellers_amount = defaultdict(int)
-    # for product_id, seller_account_id, price in cursor.fetchall():
-    #     sellers_amount[seller_account_id] += price * 100  # in cents
-
-    # # Calculate fees and total amount
-    # total_amount = 0
-    # for seller_account_id, amount in sellers_amount.items():
-    #     your_fee = int(amount * 0.03)  # 3% of the amount
-    #     total_amount += amount + your_fee
-
-    # try:
-    #     # Create the payment intent
-    #     payment_intent = stripe.PaymentIntent.create(
-    #         amount=total_amount,
-    #         currency='usd',
-    #         customer=customer_id,
-    #         payment_method_types=['card'],
-    #     )
-
-    #     # Create separate transfers for each seller
-    #     for seller_account_id, amount in sellers_amount.items():
-    #         your_fee = int(amount * 0.05)
-    #         transfer = stripe.Transfer.create(
-    #             amount=amount,
-    #             currency='usd',
-    #             destination=seller_account_id,
-    #             source_transaction=payment_intent.charges.data[0].id,
-    #             transfer_group=payment_intent.charges.data[0].transfer_group,
-    #         )
-    #         stripe.Transfer.create(
-    #             amount=your_fee,
-    #             currency='usd',
-    #             destination=os.environ['YOUR_STRIPE_ACCOUNT_ID'],
-    #             source_transaction=payment_intent.charges.data[0].id,
-    #             transfer_group=payment_intent.charges.data[0].transfer_group,
-    #         )
-
-    #     return jsonify(payment_intent)
-    # except Exception as e:
-    #     return jsonify({'error': str(e)}), 400
-    # finally:
-    #     connection.close()
+    # Create separate transfers for each seller
+    for seller_account_id in sellers.keys():
+        amount = sellers[seller_account_id]['price'] * 98
+        remainder -= amount
+        transfer = stripe.Transfer.create(
+            amount=int(amount),
+            currency='usd',
+            destination=sellers[seller_account_id]['stripe_connect_account_id'],
+            transfer_group=cart_id
+        )
+        
