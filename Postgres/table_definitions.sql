@@ -1,9 +1,9 @@
 CREATE TABLE IF NOT EXISTS sellers (
     id VARCHAR(40) PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
-
     latitude FLOAT NOT NULL,
-    longitude FLOAT NOT NULL
+    longitude FLOAT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 
 );
 
@@ -12,10 +12,9 @@ CREATE TABLE IF NOT EXISTS sellers (
 CREATE TABLE products (
     id UUID PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
-
     price NUMERIC(10, 2) NOT NULL,
-
     seller_id VARCHAR(40) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (seller_id) REFERENCES sellers (id)
 );
 
