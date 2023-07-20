@@ -29,6 +29,7 @@ done
 
 
 if $LAPTOP; then
+  export LAPTOP=$LAPTOP
   STRIPE_KEY=$(</Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/stripe_key.txt)
   TAXCLOUD_KEY=$(</Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/taxcloud_key.txt)
   TAXCLOUD_LOGIN=$(</Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/taxcloud_login.txt)

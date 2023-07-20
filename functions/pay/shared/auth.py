@@ -2,9 +2,14 @@ from functools import wraps
 from flask import request, jsonify, g
 import firebase_admin
 from firebase_admin import credentials, exceptions, auth
+from shared.get_var import get_variable
 
-cred= credentials.Certificate('/Users/jacobballard/Desktop/neighborgood/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
-# cred = credentials.Certificate('/Users/jacobballard/Library/Mobile Documents/com~apple~CloudDocs/Desktop/neighborgood/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
+
+if get_variable('LAPTOP', False):
+    cred = credentials.Certificate('/Users/jacobballard/Library/Mobile Documents/com~apple~CloudDocs/Desktop/neighborgood/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
+else:
+    cred= credentials.Certificate('/Users/jacobballard/Desktop/neighborgood/pastry-6b817-firebase-adminsdk-agnbu-37de702e34.json')
+
 
 
 headers = {

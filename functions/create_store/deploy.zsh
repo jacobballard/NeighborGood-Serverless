@@ -2,6 +2,7 @@
 RUN_LOCALLY=false
 LAPTOP=false
 
+
 # Loop through arguments
 for arg in "$@"
 do
@@ -29,6 +30,7 @@ done
 
 
 if $LAPTOP; then
+  export LAPTOP=$LAPTOP
   STRIPE_KEY=$(</Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/stripe_key.txt)
   GEOCODING_KEY=$(</Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/google_maps_geocoding.txt)
   source /Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/sql_db_config.txt
@@ -55,6 +57,7 @@ if $RUN_LOCALLY; then
   export GEOCODING_KEY=$GEOCODING_KEY
   export TAXCLOUD_LOGIN_ID=$TAXCLOUD_LOGIN
   export TAXCLOUD_API_KEY=$TAXCLOUD_KEY
+  
   pip install -r requirements.txt
   cp -r ./../shared_local/* ./shared
   functions-framework --target create_store --debug --port 8085

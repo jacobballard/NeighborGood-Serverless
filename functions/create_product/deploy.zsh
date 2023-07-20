@@ -34,6 +34,7 @@ done
 # source /Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/sql_db_config.txt
 
 if $LAPTOP; then
+    export LAPTOP=$LAPTOP
     STRIPE_KEY=$(</Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/stripe_key.txt)
     GEOCODING_KEY=$(</Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/google_maps_geocoding.txt)
     source /Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/sql_db_config.txt
@@ -50,6 +51,7 @@ fi
 if $RUN_LOCALLY; then
     # Command to run locally using functions-framework
     # Copy contents from shared_local to shared
+    
     cp -r ./../shared_local/* ./shared
     functions-framework --target create_product --debug --port 8084
 else

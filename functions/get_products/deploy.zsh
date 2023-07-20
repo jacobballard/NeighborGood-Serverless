@@ -29,6 +29,7 @@ done
 # Read Stripe secret key from file
 
 if $LAPTOP; then
+export LAPTOP=$LAPTOP
     source /Users/jacobballard/Library/Mobile\ Documents/com~apple~CloudDocs/Desktop/neighborgood/sql_db_config.txt
 else
     source $HOME/Desktop/neighborgood/sql_db_config.txt
@@ -36,6 +37,7 @@ fi
 if $RUN_LOCALLY; then
     # Command to run locally using functions-framework
     # Copy contents from shared_local to shared
+    
     pip install -r requirements.txt
     cp -r ./../shared_local/* ./shared
     functions-framework --target get_products --debug --port 8083
