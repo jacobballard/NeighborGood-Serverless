@@ -23,20 +23,60 @@ def check(tc, data, order):
             return None
         else:
             print('return suggested addresss')
+            print(tc)
+            print(taxcloud_api_key)
             return  tc
 @is_authenticated_wrapper(False)
 @has_required_role("buyer")
 @functions_framework.http
 def create_store(request: flask.Request):
-
+    print('requested')
     if request.method == 'POST':
+        print('top')
+        print(request.headers)
+        print(request.remote_addr)
+
+        ip_addr = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
         print("iniside")
         user = flask.g.user
         print("User")
         print(user)
         # user_data = flask.g.user_data
         request_data = request.get_json()
+        print(request_data)
+        seller_business_type = request_data.get('type')
+    #      if (isBusiness) 'company_name': companyName,
+    #   if (isBusiness) 'company_tax_id': companyTaxId,
+    #   if (!isBusiness) 'first_name': firstName,
+    #   if (!isBusiness) 'last_name': lastName,
+    #   if (!isBusiness) 'birth_day': birthDay,
+    #   if (!isBusiness) 'birth_month': birthMonth,
+    #   if (!isBusiness) 'birth_year': birthYear,
+    #   if (!isBusiness) 'ssn_last_four': ssnLastFour,
+    # 'bank_account_number': bankAccountNumber,
+    #   'bank_routing_number': bankRoutingNumber,
+    #   'terms_accepted': termsAccepted,
 
+        bank_account_number = request_data.get('bank_account_number')
+        bank_routing_number = request_data.get('bank_routing_number')
+        # terms_accepted = request_data.get('terms_accepted')
+        terms_time_accepted = request_data.get('terms_time_accepted')
+        if (seller_business_type == 'business'):
+            print('business')
+            company_name = request_data.get('company_name')
+            company_tax_id = request_data.get('company_tax_id')
+        elif (seller_business_type == 'individual'):
+            print('indy')
+            first_name = request_data.get('first_name')
+            last_name = request_data.get('last_name')
+            birth_day = request_data.get('birth_day')
+            birth_month = request_data.get('birth_month')
+            birth_year = request_data.get('birth_year')
+            ssn_last_four = request_data.get('ssn_last_four')
+        else:
+            print("Oh no we don't have a business type??")
+
+        
         
         id = user['user_id']
         
@@ -74,14 +114,15 @@ def create_store(request: flask.Request):
         }
 
         response_first = requests.post(url=url, json=addr_data)
+        print(response_first)
 
         tc_data_billing = response_first.json()
-        
+        print(tc_data_billing)
         tc_check1_data = check(tc_data_billing, addr_data, 1)
         return_resp = {'code' : 'suggested_address'}
         if tc_check1_data is not None:
             return_resp['suggested_address'] = tc_check1_data
-            
+            print(return_resp)
             return flask.jsonify(return_resp), 200, headers
             
         
@@ -204,19 +245,83 @@ def create_store(request: flask.Request):
             print(user['email'])
 
             print('email')
+
             
             
-            stripe_account = stripe.Account.create(
-                type="custom",
-                country="US",
-                email=user["email"],  # Replace with actual email
-                idempotency_key=id,
-                metadata={
-                    'seller_id' : id,
+            if (seller_business_type == 'business'):
+                stripe_account = stripe.Account.create(
+                    type="custom",
+                    country="US",
+                    email=user["email"],  # Replace with actual email
+                    idempotency_key=id,
+                    business_type='comapny',
+                    metadata={
+                        'seller_id' : id,
+                    },
+                    capabilities={
+                        "transfers": {"requested": True},
+                    },
+                )
+                stripe_account_id = stripe_account["id"]
+                stripe_account = stripe.Account.modify(
+                    id=stripe_account_id,
+                    company={
+                        "name" : company_name,
+                        "tax_id" : company_tax_id,
+                    },
+                    )
+            elif (seller_business_type == 'individual'):
+                stripe_account = stripe.Account.create(
+                    type="custom",
+                    business_type='individual',
+                    
+                    country="US",
+                    email=user["email"],  # Replace with actual email
+                    idempotency_key=id,
+                    metadata={
+                        'seller_id' : id,
+                    },
+                    capabilities={
+                        "transfers": {"requested": True},
+                    },
+                )
+                stripe_account_id = stripe_account["id"]
+                stripe_account = stripe.Account.modify(
+                    id=stripe_account_id,
+                    individual={
+                        "dob": {
+                            "day":int(birth_day),
+                            "month":int(birth_month),
+                            "year":int(birth_year),
+                        },
+                        "first_name":first_name,
+                        "last_name":last_name,
+                        "ssn_last_4" : ssn_last_four,
+                    },
+                    )
+            # https://neighborgood.app/#/store/seller_id
+                
+            business_url = 'https://neighborgood.app/#/store/{}'.format(id)
+            stripe_account = stripe.Account.modify(
+                id=stripe_account_id,
+                business_profile={
+                    "url":business_url,
                 },
-                capabilities={
-                    "transfers": {"requested": True},
+                tos_acceptance={
+                    "date":int(terms_time_accepted),
+                    "ip":ip_addr,
                 },
+            )
+
+            stripe.Account.create_external_account(
+                id=stripe_account_id,
+                external_account={
+                    'object':'bank_account',
+                    'country':'US',
+                    'currency':'usd',
+                    'account_number':bank_account_number,
+                    'routing_number':bank_routing_number,
+                }
             )
             print("done here")
             print(stripe_account)
@@ -225,6 +330,7 @@ def create_store(request: flask.Request):
 
             # Retrieve the Stripe account
             account = stripe.Account.retrieve(stripe_account_id)
+            
 
             # Get the fields needed for verification
             fields_needed = account['requirements']['currently_due']
@@ -234,7 +340,7 @@ def create_store(request: flask.Request):
             print(fields_needed)
 
 
-            
+            # storefront_id = str(uuid.uuid4())
 
             del(addr_data['apiKey'])
             del(addr_data['apiLoginID'])
@@ -245,12 +351,12 @@ def create_store(request: flask.Request):
                 u'description' : description,
                 u'latitude': latitude,
                 u'longitude': longitude,
-                
+                # u'storefront_id' : storefront_id,
                 u'address' : addr_data,
                 u'delivery_methods' : delivery_methods,
 
             }, merge=True)
-
+            
             user_ref = firestore_db.collection('users').document(id)
 
             user_ref.set({
@@ -259,6 +365,8 @@ def create_store(request: flask.Request):
                 u'stripe_onboarding_requirements' : fields_needed,
             }, merge=True)
 
+
+        
 
         except Exception as e:
             print(e)
