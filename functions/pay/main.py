@@ -69,7 +69,7 @@ def pay(request):
     print(data)
     stripe_customer_id = firestore_db.collection(u'users').document(customer_id).get().get('stripe_customer_id')
     sellers = dict()
-    seller_stripe_ids = dict()
+    # seller_stripe_ids = dict()
 
 # {'items': 
 #  [{'product_id': '64abe744-a3e1-4dc4-b0bd-8cdc3511044f',
@@ -282,6 +282,7 @@ def pay(request):
     lookup_url = 'https://api.taxcloud.net/1.0/TaxCloud/Lookup'
     print('sellers')
     print(sellers)
+    total_shipping_fee = 0.0
     #seller_str = json.dumps(sellers, indent=4)
     # print(seller_str)
     for seller_key in sellers.keys():
@@ -298,6 +299,7 @@ def pay(request):
         shipping_fee = 0
         if 'Shipping' in sellers[seller_key]['dms']:
             shipping_fee += float(sellers[seller_key]['shipping_fee'])
+            total_shipping_fee += shipping_fee
             request_body['cartItems'].append(dict({
                 "Index": len(request_body['cartItems']),
                 "ItemID" : "shipping",
@@ -352,11 +354,12 @@ def pay(request):
         subtotal += sellers[sell]['price']
         taxes += sellers[sell]['taxes']
     
-    platform_fee = (.05 * subtotal) + (.02 * subtotal)
+    platform_fee = (.04 * subtotal)
 
     # seller_subtotal = subtotal * 0.98
 
     total_charge = subtotal + platform_fee + taxes
+    # platform_fee_displayed = 0.04 * subtotal
     total_charge *= 100
     total_post_stripe_fee = total_charge - ((total_charge * 0.029) + 0.30)
     remainder = total_post_stripe_fee
@@ -381,14 +384,17 @@ def pay(request):
         remainder -= amount
 
     cart_ref = firestore_db.collection('carts').document(cart_id)
-
+    
     cart_ref.set({
         'transfers' : sellers,
-        'total_charge' : total_charge,
-        'remainder' : remainder,
+        'total_charge' : (total_charge / 100),
+        'subtotal' : subtotal,
         'taxes' : taxes,
+        'shipping' : total_shipping_fee,
+        'platform_fee' : platform_fee,
         'origin' : origin,
         'destination' : destination,
+        'completed' : False,
         'items' : data['items'],
         'payment_id' : payment_intent['id'],
         
@@ -396,10 +402,11 @@ def pay(request):
     
         
     return (jsonify({'client_secret' : payment_intent.client_secret, 
-                     'total_charge' : total_charge, 
+                     'total_charge' : (total_charge / 100),
+                     'subtotal' : subtotal,
                      'taxes' : taxes,
-                     'shipping' : shipping_fee,
-                     'remainder' : remainder,
+                     'shipping' : total_shipping_fee,
+                     'platform_fee' : platform_fee,
                      }), 200, headers)
     # # Create separate transfers for each seller
     # for seller_account_id in sellers.keys():
