@@ -23,12 +23,16 @@ def stripe_webhook_payment_intent_succeeded(request: Request):
     if event.type == 'payment_intent.succeeded':
         payment_intent = event.data.object # contains a stripe.PaymentIntent
         print(payment_intent)
+        print(event.data.object)
         
         cart_id = payment_intent['transfer_group']
+        # latest_charge = payment_intent['latest_charge']
         print(cart_id)
         print('cart_id')
         cart_ref = firestore_db.collection('carts').document(cart_id)
-        cart_ref.update({'completed' : True})
+        print(stripe.Customer.retrieve(payment_intent['customer']))
+
+        cart_ref.update({'completed' : True, 'charge_id' : payment_intent['latest_charge']})
         
         print('PaymentIntent was successful!')
     else:

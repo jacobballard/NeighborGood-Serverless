@@ -13,19 +13,19 @@ geocoding_key = os.getenv("GEOCODING_KEY")
 
 taxcloud_login_id = os.environ['TAXCLOUD_LOGIN_ID']
 taxcloud_api_key = os.environ['TAXCLOUD_API_KEY']
-def check(tc, data, order):
-        del(tc['ErrNumber'])
-        del(tc['ErrDescription'])
-        if tc['Address2'] is None:
-            tc['Address2'] = ''
-        if data['Address1'] == tc['Address1'] and data['Address2'] == tc['Address2'] and data['City'] == tc['City'] and data['State'] == tc['State'] and data['Zip5'] == tc['Zip5'] and data['Zip4'] == tc['Zip4']:
-            print('yay')
-            return None
-        else:
-            print('return suggested addresss')
-            print(tc)
-            print(taxcloud_api_key)
-            return  tc
+# def check(tc, data, order):
+#         del(tc['ErrNumber'])
+#         del(tc['ErrDescription'])
+#         if tc['Address2'] is None:
+#             tc['Address2'] = ''
+#         if data['Address1'] == tc['Address1'] and data['Address2'] == tc['Address2'] and data['City'] == tc['City'] and data['State'] == tc['State'] and data['Zip5'] == tc['Zip5'] and data['Zip4'] == tc['Zip4']:
+#             print('yay')
+#             return None
+#         else:
+#             print('return suggested addresss')
+#             print(tc)
+#             print(taxcloud_api_key)
+#             return  tc
 @is_authenticated_wrapper(False)
 @has_required_role("buyer")
 @functions_framework.http
@@ -45,6 +45,7 @@ def create_store(request: flask.Request):
         request_data = request.get_json()
         print(request_data)
         seller_business_type = request_data.get('type')
+        tax_rate = request_data.get('tax_rate')
     #      if (isBusiness) 'company_name': companyName,
     #   if (isBusiness) 'company_tax_id': companyTaxId,
     #   if (!isBusiness) 'first_name': firstName,
@@ -88,11 +89,11 @@ def create_store(request: flask.Request):
 
         
         
-        url = 'https://api.taxcloud.net/1.0/TaxCloud/VerifyAddress'
+        # url = 'https://api.taxcloud.net/1.0/TaxCloud/VerifyAddress'
         
 
-        print("address billing")
-        print(address)
+        # print("address billing")
+        # print(address)
         if len(address['zip']) > 5:
             address['zip5'] = address['zip'].split("-")[0]
             address['zip4'] = address['zip'].split("-")[1]
@@ -109,21 +110,21 @@ def create_store(request: flask.Request):
             "State": address['state'],
             "Zip5": address['zip5'],
             "Zip4": address['zip4'],
-            "apiKey": taxcloud_api_key,
-            "apiLoginID": taxcloud_login_id
+            # "apiKey": taxcloud_api_key,
+            # "apiLoginID": taxcloud_login_id
         }
 
-        response_first = requests.post(url=url, json=addr_data)
-        print(response_first)
+        # response_first = requests.post(url=url, json=addr_data)
+        # print(response_first)
 
-        tc_data_billing = response_first.json()
-        print(tc_data_billing)
-        tc_check1_data = check(tc_data_billing, addr_data, 1)
-        return_resp = {'code' : 'suggested_address'}
-        if tc_check1_data is not None:
-            return_resp['suggested_address'] = tc_check1_data
-            print(return_resp)
-            return flask.jsonify(return_resp), 200, headers
+        # tc_data_billing = response_first.json()
+        # print(tc_data_billing)
+        # tc_check1_data = check(tc_data_billing, addr_data, 1)
+        # return_resp = {'code' : 'suggested_address'}
+        # if tc_check1_data is not None:
+        #     return_resp['suggested_address'] = tc_check1_data
+        #     print(return_resp)
+        #     return flask.jsonify(return_resp), 200, headers
             
         
 
@@ -190,6 +191,7 @@ def create_store(request: flask.Request):
         seller_values = {
             "id" : id,
             "title" : title,
+            
             # "description" : description, 
             # "instagram" : instagram,
             # "tiktok" : tiktok, 
@@ -342,11 +344,12 @@ def create_store(request: flask.Request):
 
             # storefront_id = str(uuid.uuid4())
 
-            del(addr_data['apiKey'])
-            del(addr_data['apiLoginID'])
+            # del(addr_data['apiKey'])
+            # del(addr_data['apiLoginID'])
             
             doc_ref = firestore_db.collection(u'stores').document(id)
             doc_ref.set({
+                u'tax_rate': tax_rate,
                 u'title' : title,
                 u'description' : description,
                 u'latitude': latitude,

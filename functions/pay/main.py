@@ -8,8 +8,16 @@ from flask import jsonify, request
 import requests
 import json
 from collections import defaultdict
+import pprint
 from shared.auth import is_authenticated_wrapper, headers
 
+def pretty(d, indent=0):
+   for key, value in d.items():
+      print('\t' * indent + str(key))
+      if isinstance(value, dict):
+         pretty(value, indent+1)
+      else:
+         print('\t' * (indent+1) + str(value))
 stripe.api_key = os.environ['STRIPE_API_KEY']
 
 taxcloud_login_id = os.environ['TAXCLOUD_LOGIN_ID']
@@ -26,10 +34,10 @@ def check(tc, data, order):
             print('return suggested addresss')
             return  tc
 
-def sum_modifier(modifiers, modifiers_selections, sellers, seller_key, quantity, index):
+def sum_modifier(modifiers, modifiers_selections, sellers, seller_key, quantity, index, seller_tax_rate):
     print('sum')
     print(modifiers)
-    print(modifiers_selections)
+    pprint.pprint(modifiers_selections)
     print(sellers)
     for modifier in modifiers:
         mod_id = modifier['id']
@@ -40,6 +48,7 @@ def sum_modifier(modifiers, modifiers_selections, sellers, seller_key, quantity,
             select_type = modifier_selection['type']
             is_multi_choice = modifier_selection['type'] == 'multi_choice'
             select_id = modifier_selection['id']
+            answer = modifier_selection['answer']
             if mod_id == select_id:
                 if mod_type == select_type:
                     if is_multi_choice:
@@ -49,14 +58,20 @@ def sum_modifier(modifiers, modifiers_selections, sellers, seller_key, quantity,
                             if choice['id'] == input_id:
                                 flag = True
                                 if choice['price'] != "":
-                                    sellers[seller_key]['price'] += float(choice['price']) * quantity
-                                    sellers[seller_key]['products'][index]['Price'] += float(choice['price'])
+                                    choice_price = float(choice['price'])
+                                    sellers[seller_key]['price'] += choice_price * quantity
+                                    sellers[seller_key]['products'][index]['price'] += choice_price * quantity
+                                    sellers[seller_key]['taxes'] += (choice_price * quantity) * seller_tax_rate
                     else:
                         flag = True
-                        price = modifier['price']
+                        choice_price = float(modifier['price'])
                         
-                        if price != "":
-                            sellers[seller_key]['price'] += float(price) * quantity
+                        if choice_price != "" and answer != "":
+                            sellers[seller_key]['price'] += choice_price * quantity
+                            print('print')
+                            pprint.pprint(sellers)
+                            sellers[seller_key]['products'][index]['price'] += choice_price * quantity
+                            sellers[seller_key]['taxes'] += choice_price * quantity * seller_tax_rate
         if mod_required and not flag:
             return (jsonify({'code': 'modifier selection required'}), 400, headers)                
 @is_authenticated_wrapper(True)
@@ -89,7 +104,7 @@ def pay(request):
 #             'type': 'multi_choice',
 #             'input': '7a47eda8-4f1f-47bc-bbec-a57be7da8b75'}]
 #             }]}
-#41030 - baked goodss
+#41030 - baked goods
 
 
 
@@ -101,14 +116,16 @@ def pay(request):
         dm = item['delivery_method']
         delivery_method_price = 0.0
         delivery_methods = firestore_db.collection(u'stores').document(seller_key).collection(u'products').document(product_key).get().get('delivery_methods')
-        is_shipping = False
+        # is_shipping = False
         found_dm = False
         for method in delivery_methods:
             if dm == method['type']:
                 found_dm = True
                 if dm == 'Shipping':
-                    is_shipping = True
-                    delivery_method_price = float(method['fee'])
+
+                    delivery_method_price = float(method['fee']) if method['fee'] != '' else 0
+                elif dm == 'Delivery':
+                    delivery_method_price = float(method['fee']) if method['fee'] != '' else 0
         
         if not found_dm:
             return jsonify({'error' : 'no such shipping method exists'}), 400, headers
@@ -118,42 +135,54 @@ def pay(request):
         product = firestore_db.collection(u'stores').document(seller_key).collection(u'products').document(product_key).get()
 
         modifiers = firestore_db.collection(u'stores').document(seller_key).collection(u'products').document(product_key).get().get('modifiers')
-        
+        print(seller_key)
+        print(firestore_db.collection(u'stores').document(seller_key).get())
+        seller_tax_rate = float(firestore_db.collection(u'stores').document(seller_key).get().get('tax_rate'))
+        print(seller_tax_rate)
         print(sellers)
         # print(seller_stripe_ids)
         # print('stripe id')
         index = None
         if seller_key in sellers:
-            sellers[seller_key]['price'] += quantity * float(firestore_db.collection(u'users').document(seller_key).collection(u'products').document(product_key).get().get('price'))
-            sellers[seller_key]['shipping_fee'] += delivery_method_price if is_shipping else 0.0
-            sellers[seller_key]['price'] += (quantity * delivery_method_price) if not is_shipping else 0.0
+            print(str(product.get('price')))
+            print(seller_key)
+            print(product_key)
+            price = quantity * float(product.get('price'))
+            sellers[seller_key]['items'].append(item)
+            sellers[seller_key]['price'] += price
+            sellers[seller_key]['shipping_fee'] += (delivery_method_price * quantity) if dm == 'Shipping' else delivery_method_price
+            # sellers[seller_key]['price'] += (delivery_method_price * quantity) if dm == 'Shipping' else delivery_method_price
             sellers[seller_key]['dms'].add(dm)
+            sellers[seller_key]['taxes'] += price * float(seller_tax_rate)
             index = len(sellers[seller_key]['products'])
+
             sellers[seller_key]['products'].append(dict({
                 "Index" : index,
                 "ItemID" : product_key,
-                "TIC" : 41030,
-                "Price": product['price']/quantity,
+                # "TIC" : 41030,
+                "price": float(product.get('price'))/quantity,
                 "Qty": quantity
             }))
         else:
             index = 0
+            price = quantity * (float(firestore_db.collection(u'stores').document(seller_key).collection(u'products').document(product_key).get().get('price')))# + delivery_method_price if not is_shipping else 0.0)
             sellers[seller_key] = dict({
-                'price' :quantity * (float(firestore_db.collection(u'stores').document(seller_key).collection(u'products').document(product_key).get().get('price')) + delivery_method_price if not is_shipping else 0.0), 
-                'shipping_fee' : delivery_method_price if is_shipping else 0.0,
-                'dms':set({dm}), 
-                'taxes' :0.0,
+                'items' : [item],
+                'price' :price, 
+                'shipping_fee' : (delivery_method_price * quantity) if dm == 'Shipping' else delivery_method_price,
+                'dms':set(dm), 
+                'taxes' : price * float(seller_tax_rate),
                 'stripe_connect_account_id' : firestore_db.collection(u'users').document(seller_key).get().get('stripe_connect_account_id'),
                 'products': [dict({
                 "Index" : index,
                 "ItemID" : product_key,
-                "TIC" : 41030,
-                "Price": product.get('price')/quantity,
+                # "TIC" : 41030,
+                "price": price,
                 "Qty": quantity
                 })]
             })
         # sellers[seller_key] += delivery_method_price
-        sum_modifier(modifiers=modifiers, modifiers_selections=modifiers_selections, sellers=sellers, seller_key=seller_key, quantity=quantity, index=index)
+        sum_modifier(modifiers=modifiers, modifiers_selections=modifiers_selections, sellers=sellers, seller_key=seller_key, quantity=quantity, index=index,seller_tax_rate=seller_tax_rate)
     # print(sellers)
     # subtotal = sum(sellers.values())
     # platform_fee_percent = 0.05
@@ -184,169 +213,170 @@ def pay(request):
 #     "apiLoginID": "string"
 # }
     
-    verify_url = 'https://api.taxcloud.net/1.0/TaxCloud/VerifyAddress'
-    address_billing = data['address_billing']
+    # verify_url = 'https://api.taxcloud.net/1.0/TaxCloud/VerifyAddress'
+    # address_billing = data['address_billing']
 
-    print("address billing")
-    print(address_billing)
-    if len(address_billing['zip']) > 5:
-        address_billing['zip5'] = address_billing['zip'].split("-")[0]
-        address_billing['zip4'] = address_billing['zip'].split("-")[1]
-    elif len(address_billing['zip']) == 5:
-        address_billing['zip5'] = address_billing['zip']
-        address_billing['zip4'] = ''
-    else:
-        return (headers, jsonify({'error':'should never get this'}), 400)
+    # print("address billing")
+    # print(address_billing)
+    # if len(address_billing['zip']) > 5:
+    #     address_billing['zip5'] = address_billing['zip'].split("-")[0]
+    #     address_billing['zip4'] = address_billing['zip'].split("-")[1]
+    # elif len(address_billing['zip']) == 5:
+    #     address_billing['zip5'] = address_billing['zip']
+    #     address_billing['zip4'] = ''
+    # else:
+    #     return (headers, jsonify({'error':'should never get this'}), 400)
     address_shipping = data['address_shipping']
-    print("address shipping")
-    print(address_shipping)
-    if len(address_shipping['zip']) > 5:
-        address_shipping['zip5'] = address_shipping['zip'].split("-")[0]
-        address_shipping['zip4'] = address_shipping['zip'].split("-")[1]
-    elif len(address_shipping['zip']) == 5:
-        address_shipping['zip5'] = address_shipping['zip']
-        address_shipping['zip4'] = ''
-    else:
-        return (headers, jsonify({'error':'should never get this'}), 400)
-    data_billing = {
-        "Address1": address_billing['address_line_1'],
-        "Address2": address_billing['address_line_2'],
-        "City": address_billing['city'],
-        "State": address_billing['state'],
-        "Zip5": address_billing['zip5'],
-        "Zip4": address_billing['zip4'],
-        "apiKey": taxcloud_api_key,
-        "apiLoginID": taxcloud_login_id
-    }
+    # print("address shipping")
+    # print(address_shipping)
+    # if len(address_shipping['zip']) > 5:
+    #     address_shipping['zip5'] = address_shipping['zip'].split("-")[0]
+    #     address_shipping['zip4'] = address_shipping['zip'].split("-")[1]
+    # elif len(address_shipping['zip']) == 5:
+    #     address_shipping['zip5'] = address_shipping['zip']
+    #     address_shipping['zip4'] = ''
+    # else:
+    #     return (headers, jsonify({'error':'should never get this'}), 400)
+    # data_billing = {
+    #     "Address1": address_billing['address_line_1'],
+    #     "Address2": address_billing['address_line_2'],
+    #     "City": address_billing['city'],
+    #     "State": address_billing['state'],
+    #     "Zip5": address_billing['zip5'],
+    #     "Zip4": address_billing['zip4'],
+    #     "apiKey": taxcloud_api_key,
+    #     "apiLoginID": taxcloud_login_id
+    # }
 
-    data_shipping = {
-        "Address1": address_shipping['address_line_1'],
-        "Address2": address_shipping['address_line_2'],
-        "City": address_shipping['city'],
-        "State": address_shipping['state'],
-        "Zip5": address_shipping['zip5'],
-        "Zip4": address_shipping['zip4'],
-        "apiKey": taxcloud_api_key,
-        "apiLoginID": taxcloud_login_id
-    }
+    # data_shipping = {
+    #     "Address1": address_shipping['address_line_1'],
+    #     "Address2": address_shipping['address_line_2'],
+    #     "City": address_shipping['city'],
+    #     "State": address_shipping['state'],
+    #     "Zip5": address_shipping['zip5'],
+    #     "Zip4": address_shipping['zip4'],
+    #     "apiKey": taxcloud_api_key,
+    #     "apiLoginID": taxcloud_login_id
+    # }
 
     
-    response_first = requests.post(url=verify_url, json=data_billing)
+    # response_first = requests.post(url=verify_url, json=data_billing)
 
-    response_second = ""
-    tc_check2_data = None
-    print("sbaoibdasbdas data billing")
-    print(data_billing)
-    print(data_shipping)
-    if data_billing != data_shipping:
-        print('oh no')
-        response_second = requests.post(url=verify_url, json=data_shipping)
-        tc_data_shipping = response_second.json()
-        tc_check2_data = check(tc_data_shipping, data_shipping, 2)
-    print("response")
-    tc_data_billing = response_first.json()
+    # response_second = ""
+    # tc_check2_data = None
+    # print("sbaoibdasbdas data billing")
+    # print(data_billing)
+    # print(data_shipping)
+    # if data_billing != data_shipping:
+    #     print('oh no')
+    #     response_second = requests.post(url=verify_url, json=data_shipping)
+    #     tc_data_shipping = response_second.json()
+    #     tc_check2_data = check(tc_data_shipping, data_shipping, 2)
+    # print("response")
+    # tc_data_billing = response_first.json()
     
-    tc_check1_data = check(tc_data_billing, data_billing, 1)
-    return_resp = {'code' : 'suggested_address'}
-    if tc_check1_data is not None:
-        return_resp['billing'] = tc_check1_data
-        if tc_check2_data is not None:
-            print("bof")
+    # tc_check1_data = check(tc_data_billing, data_billing, 1)
+    # return_resp = {'code' : 'suggested_address'}
+    # if tc_check1_data is not None:
+    #     return_resp['billing'] = tc_check1_data
+    #     if tc_check2_data is not None:
+    #         print("bof")
             
             
-            return_resp['shipping'] = tc_check2_data
-            print(return_resp)
-            return jsonify(return_resp), 200, headers
-        else:
-            print(return_resp)
-            return jsonify(return_resp), 200, headers
-    else:
-        if tc_check2_data is not None:
-            print("tccheck2data not none")
-            print(tc_check2_data)
-            # TODO: Make this shipping?
-            return_resp['2'] = tc_check2_data
-            print(return_resp)
-            return jsonify(return_resp), 200, headers
-        else:
-            print("else")
+    #         return_resp['shipping'] = tc_check2_data
+    #         print(return_resp)
+    #         return jsonify(return_resp), 200, headers
+    #     else:
+    #         print(return_resp)
+    #         return jsonify(return_resp), 200, headers
+    # else:
+    #     if tc_check2_data is not None:
+    #         print("tccheck2data not none")
+    #         print(tc_check2_data)
+    #         # TODO: Make this shipping?
+    #         return_resp['2'] = tc_check2_data
+    #         print(return_resp)
+    #         return jsonify(return_resp), 200, headers
+    #     else:
+    #         print("else")
     
 
 
 
 
-    #https://api.taxcloud.net/1.0/TaxCloud/Lookup
+    # #https://api.taxcloud.net/1.0/TaxCloud/Lookup
 
     cart_id = str(uuid.uuid4())
-    # seller_taxes = dict()
-    lookup_url = 'https://api.taxcloud.net/1.0/TaxCloud/Lookup'
-    print('sellers')
-    print(sellers)
+    # # seller_taxes = dict()
+    # lookup_url = 'https://api.taxcloud.net/1.0/TaxCloud/Lookup'
+    # print('sellers')
+    # print(sellers)
     total_shipping_fee = 0.0
-    #seller_str = json.dumps(sellers, indent=4)
-    # print(seller_str)
+    # #seller_str = json.dumps(sellers, indent=4)
+    # # print(seller_str)
     for seller_key in sellers.keys():
         print('seller key')
         print(seller_key)
         seller_address = firestore_db.collection(u'stores').document(seller_key).get().get('address')
-        request_body = dict({
-            "apiKey": taxcloud_api_key,
-            "apiLoginID": taxcloud_login_id,
-            "cartID" : cart_id,
-            "customerID" : customer_id,
-            "cartItems" : sellers[seller_key]['products']
-        })
+        sellers[seller_key]['address'] = seller_address
+    #     request_body = dict({
+    #         "apiKey": taxcloud_api_key,
+    #         "apiLoginID": taxcloud_login_id,
+    #         "cartID" : cart_id,
+    #         "customerID" : customer_id,
+    #         "cartItems" : sellers[seller_key]['products']
+    #     })
         shipping_fee = 0
         if 'Shipping' in sellers[seller_key]['dms']:
             shipping_fee += float(sellers[seller_key]['shipping_fee'])
             total_shipping_fee += shipping_fee
-            request_body['cartItems'].append(dict({
-                "Index": len(request_body['cartItems']),
-                "ItemID" : "shipping",
-                "TIC": 10010,
-                "Price":sellers[seller_key]['shipping_fee'],
-                "Qty": 1
-                }))
+    #         request_body['cartItems'].append(dict({
+    #             "Index": len(request_body['cartItems']),
+    #             "ItemID" : "shipping",
+    #             "TIC": 10010,
+    #             "Price":sellers[seller_key]['shipping_fee'],
+    #             "Qty": 1
+    #             }))
             
-        if 'Delivery' in sellers[seller_key]['dms']:
-            request_body['deliveredBySeller'] = True
-            shipping_fee += float(sellers[seller_key]['shipping_fee'])
-        else:
-            request_body['deliveredBySeller'] = False
-        print("seller address")
-        print(seller_address)
-        print(address_shipping)
-        origin = {
-            "Address1" : seller_address['Address1'],
-            'Address2' : seller_address['Address2'],
-            "City" : seller_address['City'],
-            "State" : seller_address['State'],
-            "Zip4" : seller_address['Zip4'],
-            "Zip5" : seller_address['Zip5']
-        }
-        request_body['origin'] = origin
-        destination = {
-            "Address1": address_shipping['address_line_1'],
-            "Address2": address_shipping['address_line_2'],
-            "City": address_shipping['city'],
-            "State": address_shipping['state'],
-            "Zip5": address_shipping['zip5'],
-            "Zip4": address_shipping['zip4'],
-        }
+    #     if 'Delivery' in sellers[seller_key]['dms']:
+    #         request_body['deliveredBySeller'] = True
+    #         shipping_fee += float(sellers[seller_key]['shipping_fee'])
+    #     else:
+    #         request_body['deliveredBySeller'] = False
+    #     print("seller address")
+    #     print(seller_address)
+    #     print(address_shipping)
+    #     origin = {
+    #         "Address1" : seller_address['Address1'],
+    #         'Address2' : seller_address['Address2'],
+    #         "City" : seller_address['City'],
+    #         "State" : seller_address['State'],
+    #         "Zip4" : seller_address['Zip4'],
+    #         "Zip5" : seller_address['Zip5']
+    #     }
+    #     request_body['origin'] = origin
+    #     destination = {
+    #         "Address1": address_shipping['address_line_1'],
+    #         "Address2": address_shipping['address_line_2'],
+    #         "City": address_shipping['city'],
+    #         "State": address_shipping['state'],
+    #         "Zip5": address_shipping['zip5'],
+    #         "Zip4": address_shipping['zip4'],
+    #     }
         
-        request_body['destination'] = destination
-        # print(request_body)
-        json_str = json.dumps(request_body, indent=4)
-        print(json_str)
-        print('request body')
-        verify_response = requests.post(url=lookup_url,json=request_body).json()
-        print(verify_response)
-        print("verify")
+    #     request_body['destination'] = destination
+    #     # print(request_body)
+    #     json_str = json.dumps(request_body, indent=4)
+    #     print(json_str)
+    #     print('request body')
+    #     verify_response = requests.post(url=lookup_url,json=request_body).json()
+    #     print(verify_response)
+    #     print("verify")
         
-        if verify_response['ResponseType'] == 3:
-            # response = verify_response['L
-            for item in verify_response['CartItemsResponse']:
-                sellers[seller_key]['taxes'] += float(item['TaxAmount'])
+    #     if verify_response['ResponseType'] == 3:
+    #         # response = verify_response['L
+    #         for item in verify_response['CartItemsResponse']:
+    #             sellers[seller_key]['taxes'] += float(item['TaxAmount'])
     
     subtotal = 0.0
     taxes = 0.0
@@ -384,22 +414,31 @@ def pay(request):
         remainder -= amount
 
     cart_ref = firestore_db.collection('carts').document(cart_id)
-    
+    print('cart ref')
+    print(sellers)
+    print(subtotal)
+    print(taxes)
+    print(total_shipping_fee)
+    print(platform_fee)
+    print(address_shipping)
+
     cart_ref.set({
+        'customer_id': customer_id,
         'transfers' : sellers,
         'total_charge' : (total_charge / 100),
         'subtotal' : subtotal,
         'taxes' : taxes,
         'shipping' : total_shipping_fee,
         'platform_fee' : platform_fee,
-        'origin' : origin,
-        'destination' : destination,
+        
+        'destination' : address_shipping,
         'completed' : False,
         'items' : data['items'],
         'payment_id' : payment_intent['id'],
         
     })
-    
+    print(total_charge)
+    print('total')
         
     return (jsonify({'client_secret' : payment_intent.client_secret, 
                      'total_charge' : (total_charge / 100),

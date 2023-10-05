@@ -32,6 +32,7 @@ def on_user_created(data, context):
         })
         user_ref.set({
         "role": "buyer",
+        
         "stripe_customer_id": customer["id"],
         })
     else:

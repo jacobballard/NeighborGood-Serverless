@@ -9,3 +9,5 @@ gcloud functions deploy on_user_created \
   --trigger-event providers/firebase.auth/eventTypes/user.create \
   --trigger-resource pastry-6b817 \
   --set-env-vars STRIPE_API_KEY=$STRIPE_KEY
+
+  
